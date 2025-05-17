@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+
+<html lang="es">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Juego de Ruleta (Compatible)</title>
+
+<style>
+
+  body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 110vh;
+  font-family: 'Arial', sans-serif;
+  background-image: url('cpa.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  margin: 0;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+
+  .roulette-container {
+
+    position: relative;
+
+    display: flex;
+
+    flex-direction: column;
+
+    align-items: center;
+
+    margin-bottom: 20px;
+
+  }
+
+  #rouletteWheel {
+
+    display: block;
+
+    border-radius: 50%;
+
+    box-shadow: 0 0 15px rgba(0,0,0,0.2);
+
+  }
+
+  .pointer {
+  position: absolute;
+ top: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+}
+
+.pointer::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -15px;
+  width: 0;
+  height: 0;
+  border-left: 17px solid transparent;
+  border-right: 17px solid transparent;
+  border-top: 29px solid white; /* Borde exterior blanco */
+}
+
+.pointer::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: -13px;
+  width: 0;
+  height: 0;
+  border-left: 15px solid transparent;
+  border-right: 15px solid transparent;
+  border-top: 25px solid red; /* Triángulo interior */
+}
+
+
+  #spinButton {
+  margin-top: 25px;
+  padding: 12px 25px;
+  font-size: 1.2em;
+  font-weight: bold;
+  color: black;
+  background: linear-gradient(145deg, #FFD700, #FFC107); /* Degradado dorado */
+  border: 2px solid #fff8dc; /* Borde claro para brillo */
+  border-radius: 25px;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+}
+
+#spinButton:disabled {
+  background: #ddd;
+  color: white;
+  border: 2px solid #ccc;
+  cursor: not-allowed;
+}
+
+#spinButton:hover:not(:disabled) {
+  background: linear-gradient(145deg, #FFC107, #FFD700);
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.3);
+}
+
+  #result {
+
+    margin-top: 20px;
+
+    padding: 15px;
+
+    font-size: 1.5em;
+
+    font-weight: bold;
+
+    color: #333;
+
+    background-color: white;
+
+    border-radius: 15px;
+
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+
+    min-height: 50px;
+
+    text-align: center;
+
+    width: 90%;
+
+    max-width: 400px;
+
+  }
+
+</style>
+
+</head>
+
+<body>
+
+
+
+<div class="roulette-container">
+
+  <div class="pointer"></div>
+
+  <canvas id="rouletteWheel" width="400" height="400"></canvas>
+
+  <button id="spinButton">Girar Ruleta</button>
+
+</div>
+
+<div id="result">¡Haz clic en 'Girar Ruleta' para empezar!</div>
+
+
+
+<script>
+
+  var canvas = document.getElementById('rouletteWheel');
+
+  var ctx = canvas.getContext('2d');
+
+  var spinButton = document.getElementById('spinButton');
+
+  var resultDiv = document.getElementById('result');
+
+
+
+var segments = [
+  { text: "Participa en el siguiente stand", proportion: 1, color: "#f28322", actualText: "Sigue participando en el siguiente stand" },
+  { text: "Desafío: responde y gana", proportion: 1, color: "#f2d022", actualText: "Desafío: responde y gana" },
+  { text: "Otra oportunidad", proportion: 1, color: "#f2e6ce", actualText: "¡Casi! Tienes otro intento" },
+  { text: "⁠¡Felicidades, ganaste!", proportion: 1, color: "#f2e422", actualText: "¡Felicidades, ganaste!" },
+  { text: "Participa en el siguiente stand", proportion: 1, color: "#f28322", actualText: "¡Sigue participando en el siguiente stand!" },
+  { text: "Desafío: responde y gana", proportion: 1, color: "#f2d022", actualText: "Desafío: responde y gana" },
+  { text: "Otra oportunidad", proportion: 1, color: "#f2e6ce", actualText: "¡Casi! Tienes otro intento" },
+  { text: "¡Felicidades, ganaste!", proportion: 1, color: "#f2e422", actualText: "¡Felicidades, ganaste!" }
+];
+
+
+
+  var totalProportion = segments.reduce(function(sum, seg) { return sum + seg.proportion; }, 0);
+
+  var PI2 = Math.PI * 2;
+
+  var radius = canvas.width / 2 - 10;
+
+  var centerX = canvas.width / 2;
+
+  var centerY = canvas.height / 2;
+
+
+
+  var currentRotation = 0;
+
+  var targetRotation = 0;
+
+  var isSpinning = false;
+
+  var winningSegment;
+
+
+
+  var proportions = segments.map(function(s) { return s.proportion; });
+
+  var maxProportion = Math.max.apply(null, proportions); // Compatible con ES5
+
+
+
+  function getTextColorForBackground(hexColor) {
+
+    var r = parseInt(hexColor.slice(1, 3), 16);
+
+    var g = parseInt(hexColor.slice(3, 5), 16);
+
+    var b = parseInt(hexColor.slice(5, 7), 16);
+
+    var brightness = (r * 299 + g * 587 + b * 114) / 1000;
+
+    return brightness > 135 ? 'black' : 'white';
+
+  }
+
+
+
+  function drawSegment(index, startAngle, endAngle) {
+
+    var segment = segments[index];
+
+    ctx.beginPath();
+
+    ctx.moveTo(centerX, centerY);
+
+    ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+
+    ctx.closePath();
+
+    ctx.fillStyle = segment.color;
+
+    ctx.fill();
+
+    ctx.strokeStyle = '#ffffff';
+
+    ctx.lineWidth = 2;
+
+    ctx.stroke();
+
+
+
+    ctx.save();
+
+    ctx.translate(centerX, centerY);
+
+    var midAngle = startAngle + (endAngle - startAngle) / 2;
+
+    ctx.rotate(midAngle);
+
+
+
+    var baseFontSize = 8; 
+
+    var maxFontSizeIncrement = 8;
+
+    var fontSize = baseFontSize; // Usar var
+
+    if (maxProportion > 0) {
+
+        fontSize += (segment.proportion / maxProportion) * maxFontSizeIncrement;
+
+    }
+
+    fontSize = Math.round(fontSize);
+
+
+
+    ctx.font = 'bold ' + fontSize + 'px Arial'; // Concatenación compatible
+
+    ctx.fillStyle = getTextColorForBackground(segment.color);
+
+    ctx.textAlign = 'center';
+
+    ctx.textBaseline = 'middle';
+
+
+
+    var textPositionRadius = radius * 0.62;
+
+
+
+ var lines = wrapText(ctx, segment.text, radius * 0.7);
+var lineHeight = fontSize + 2;
+
+for (var i = 0; i < lines.length; i++) {
+  var y = (i - (lines.length - 1) / 2) * lineHeight;
+  if (midAngle > Math.PI / 2 && midAngle < Math.PI * 1.5) {
+    ctx.rotate(Math.PI);
+    ctx.fillText(lines[i], -textPositionRadius, y);
+    ctx.rotate(-Math.PI);
+  } else {
+    ctx.fillText(lines[i], textPositionRadius, y);
+  }
+}
+
+    ctx.restore();
+
+  }
+
+
+	function wrapText(context, text, maxWidth) {
+  var words = text.split(' ');
+  var lines = [];
+  var line = '';
+
+  for (var n = 0; n < words.length; n++) {
+    var testLine = line + words[n] + ' ';
+    var metrics = context.measureText(testLine);
+    var testWidth = metrics.width;
+
+    if (testWidth > maxWidth && n > 0) {
+      lines.push(line.trim());
+      line = words[n] + ' ';
+    } else {
+      line = testLine;
+    }
+  }
+
+  lines.push(line.trim());
+  return lines;
+}
+	
+	
+
+  function drawWheel() {
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    ctx.save();
+
+    ctx.translate(centerX, centerY);
+
+    ctx.rotate(currentRotation);
+
+    ctx.translate(-centerX, -centerY);
+
+
+
+    var startAngle = 0; // Usar var
+
+    for (var i = 0; i < segments.length; i++) { // Usar var
+
+      var angleSlice = (segments[i].proportion / totalProportion) * PI2; // Usar var
+
+      drawSegment(i, startAngle, startAngle + angleSlice);
+
+      startAngle += angleSlice;
+
+    }
+
+    ctx.restore();
+
+  }
+
+
+
+  function easeOutCubic(t) {
+
+    return (--t) * t * t + 1;
+
+  }
+
+
+
+  function animateSpin(startTime, startRotationValue, targetRotationValue, duration) {
+
+    var currentTime = Date.now(); // Usar var
+
+    var elapsed = currentTime - startTime; // Usar var
+
+    
+
+    if (elapsed >= duration) {
+
+      currentRotation = targetRotationValue;
+
+      drawWheel();
+
+      isSpinning = false;
+
+      spinButton.disabled = false;
+
+      resultDiv.textContent = '' + winningSegment.actualText; // Concatenación compatible
+
+      if (winningSegment.actualText === "Has Ganado") {
+
+          resultDiv.textContent += " ¡Felicidades!";
+
+      } else if (winningSegment.actualText === "Contesta y Gana") {
+
+          resultDiv.textContent += " (¡Prepárate para la pregunta!)";
+
+      } else if (winningSegment.actualText === "Gano Otro Intento") {
+
+          resultDiv.textContent += " ¡Tienes otra oportunidad!";
+
+      }
+
+      return;
+
+    }
+
+
+
+    var progress = elapsed / duration; // Usar var
+
+    var easedProgress = easeOutCubic(progress); // Usar var
+
+    currentRotation = startRotationValue + (targetRotationValue - startRotationValue) * easedProgress;
+
+    
+
+    drawWheel();
+
+    requestAnimationFrame(function() { // Función tradicional
+
+        animateSpin(startTime, startRotationValue, targetRotationValue, duration);
+
+    });
+
+  }
+
+
+
+  spinButton.addEventListener('click', function() { // Función tradicional
+
+    if (isSpinning) return;
+
+    isSpinning = true;
+
+    spinButton.disabled = true;
+
+    resultDiv.textContent = "Girando...";
+
+
+
+    var randomNumber = Math.random() * totalProportion; // Usar var
+
+    var cumulativeProportion = 0; // Usar var
+
+    var tempAngleForCalc = 0; // Usar var
+
+
+
+    for (var i = 0; i < segments.length; i++) { // Usar var
+
+      var segmentAngleWidth = (segments[i].proportion / totalProportion) * PI2; // Usar var
+
+      cumulativeProportion += segments[i].proportion;
+
+
+
+      if (randomNumber <= cumulativeProportion) {
+
+        winningSegment = segments[i];
+
+        
+
+        var segmentStartAngle = tempAngleForCalc; // Usar var
+
+        var segmentEndAngle = tempAngleForCalc + segmentAngleWidth; // Usar var
+
+        var targetAngleOnWheel = segmentStartAngle + (segmentEndAngle - segmentStartAngle) / 2; // Usar var
+
+        
+
+        var pointerAngle = -Math.PI / 2; // Usar var
+
+        var desiredFinalOrientation = pointerAngle - targetAngleOnWheel; // Usar var
+
+        desiredFinalOrientation = (desiredFinalOrientation % PI2 + PI2) % PI2;
+
+
+
+        var baseSpins = 8; // Usar var
+
+        var currentEffectiveAngle = (currentRotation % PI2 + PI2) % PI2; // Usar var
+
+        var spinIncrement = desiredFinalOrientation - currentEffectiveAngle; // Usar var
+
+
+
+        if (spinIncrement < 0) {
+
+            spinIncrement += PI2; 
+
+        }
+
+        
+
+        targetRotation = currentRotation + spinIncrement + (baseSpins * PI2);
+
+        break; 
+
+      }
+
+      tempAngleForCalc += segmentAngleWidth;
+
+    }
+
+
+
+    var spinDuration = 5000; // Usar var
+
+    animateSpin(Date.now(), currentRotation, targetRotation, spinDuration);
+
+  });
+
+
+
+  drawWheel();
+
+  resultDiv.textContent = "¡Haz clic en 'Girar Ruleta' para empezar!";
+
+</script>
+
+
+
+</body>
+
+</html>
